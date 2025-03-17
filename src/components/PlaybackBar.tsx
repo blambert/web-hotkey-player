@@ -99,12 +99,56 @@ export default function PlaybackBar() {
   }
   
   const displayTitle = () => {
+    if (!currentAudio) return null
+    
     if (currentPlaylist) {
       const currentTrack = currentAudio?.name || 'Unknown'
       return `${currentPlaylist.name}: ${currentTrack} (${currentPlaylistIndex + 1}/${currentPlaylist.items.length})`
     }
     
-    return currentAudio?.name || 'No track playing'
+    return currentAudio?.name
+  }
+  
+  // Only show playback controls if there's something to play
+  if (!currentAudio && !isPlaying) {
+    return (
+      <div className="bg-gray-800 border-b border-gray-700 p-3">
+        <div className="flex flex-col">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex space-x-3">
+              <button 
+                onClick={() => setLoop(!loop)}
+                className={`p-1.5 rounded-full ${loop ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+              >
+                <Repeat size={16} />
+              </button>
+              
+              <button 
+                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                disabled={true}
+              >
+                <Play size={16} />
+              </button>
+              
+              <button 
+                disabled={true}
+                className="p-1.5 rounded-full bg-gray-700 text-gray-400 opacity-50 cursor-not-allowed"
+              >
+                <Square size={16} />
+              </button>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              {/* Empty space where times would be */}
+            </div>
+          </div>
+          
+          <div className="relative h-2 bg-gray-700 rounded-full overflow-hidden">
+            {/* Empty progress bar */}
+          </div>
+        </div>
+      </div>
+    )
   }
   
   return (

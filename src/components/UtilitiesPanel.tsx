@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useAudio } from '../contexts/AudioContext'
-import { Download, Upload, Settings, AlertCircle } from 'lucide-react'
+import { Download, Upload, Settings, AlertCircle, X } from 'lucide-react'
 import { AudioFile, HotKey } from '../types'
 
 interface ExportData {
@@ -26,7 +26,9 @@ export default function UtilitiesPanel() {
     setHeadTrim,
     setTailTrim,
     assignToHotkey,
-    clearHotkey
+    clearHotkey,
+    isUnassignMode,
+    toggleUnassignMode
   } = useAudio()
   
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -266,6 +268,24 @@ export default function UtilitiesPanel() {
       </div>
       
       <div className="space-y-3">
+        <div className="p-3 bg-gray-800 rounded">
+          <h3 className="text-sm font-medium mb-2">Hotkey Management</h3>
+          <button
+            className={`w-full px-3 py-2 ${isUnassignMode 
+              ? 'bg-red-600 hover:bg-red-700' 
+              : 'bg-gray-700 hover:bg-gray-600'} text-white rounded flex items-center justify-center`}
+            onClick={toggleUnassignMode}
+          >
+            <X size={16} className="mr-2" />
+            {isUnassignMode ? 'Exit Unassign Mode' : 'Unassign Hotkeys'}
+          </button>
+          {isUnassignMode && (
+            <p className="text-xs text-red-400 mt-2">
+              Click on any hotkey to unassign it
+            </p>
+          )}
+        </div>
+        
         <div className="p-3 bg-gray-800 rounded">
           <h3 className="text-sm font-medium mb-2">Export Settings</h3>
           <p className="text-xs text-gray-400 mb-3">

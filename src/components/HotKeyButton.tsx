@@ -2,7 +2,7 @@ import { MouseEvent } from 'react'
 import { useAudio } from '../contexts/AudioContext'
 import { useDnd } from '../contexts/DndContext'
 import { HotKey } from '../types'
-import { Music, ListMusic } from 'lucide-react'
+import { Music, ListMusic, X } from 'lucide-react'
 
 interface HotKeyButtonProps {
   hotkey: HotKey | undefined
@@ -10,13 +10,30 @@ interface HotKeyButtonProps {
 }
 
 export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
-  const { play, stop, getAudioById, assignToHotkey, clearHotkey, playbackStatus, playlists } = useAudio()
+  const { 
+    play, 
+    stop, 
+    getAudioById, 
+    assignToHotkey, 
+    clearHotkey, 
+    playbackStatus, 
+    playlists, 
+    getEffectiveDuration,
+    isUnassignMode
+  } = useAudio()
+  
   const { draggedItem, setDraggedItem } = useDnd()
   
   if (!hotkey) return null
   
   const handleClick = () => {
     if (!hotkey.assignedItem) return
+    
+    // If in unassign mode, clear the hotkey instead of playing
+    if (isUnassignMode) {
+      clearHotkey(hotkey.bankId, hotkey.position)
+      return
+    }
     
     if (isPlaying) {
       stop()
@@ -34,6 +51,9 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
     e.preventDefault()
     e.stopPropagation()
     
+    // Don't allow drops when in unassign mode
+    if (isUnassignMode) return
+    
     if (draggedItem) {
       assignToHotkey(hotkey.bankId, hotkey.position, {
         type: draggedItem.type as 'audio' | 'playlist',
@@ -42,11 +62,6 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
       
       setDraggedItem(null)
     }
-  }
-  
-  const handleClear = (e: MouseEvent) => {
-    e.stopPropagation()
-    clearHotkey(hotkey.bankId, hotkey.position)
   }
   
   const getLabel = () => {
@@ -75,19 +90,50 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
     return null
   }
   
+  const getTrackLength = () => {
+    if (!hotkey.assignedItem) return null
+    
+    if (hotkey.assignedItem.type === 'audio') {
+      const audio = getAudioById(hotkey.assignedItem.id)
+      if (audio) {
+        const duration = getEffectiveDuration(audio)
+        return formatTime(duration)
+      }
+    } else if (hotkey.assignedItem.type === 'playlist') {
+      const playlist = playlists.find(p => p.id === hotkey.assignedItem?.id)
+      if (playlist) {
+        const totalDuration = playlist.items.reduce((total, item) => {
+          const audio = getAudioById(item.audioId)
+          return total + (audio ? getEffectiveDuration(audio) : 0)
+        }, 0)
+        return formatTime(totalDuration)
+      }
+    }
+    
+    return null
+  }
+  
+  // Format time as MM:SS
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60)
+    const seconds = Math.floor(time % 60)
+    
+    return `${minutes}:${String(seconds).padStart(2, '0')}`
+  }
+  
   const buttonClass = hotkey.assignedItem
-    ? `w-full h-16 rounded flex flex-col items-center justify-center p-1 transition-colors
+    ? `w-full h-16 rounded flex flex-col items-center justify-center p-1 transition-colors relative
        ${isPlaying 
            ? 'bg-green-700 text-white' 
            : hotkey.assignedItem.type === 'audio' 
                ? 'bg-blue-700 hover:bg-blue-600 text-white'
                : 'bg-green-700 hover:bg-green-600 text-white'
        }`
-    : 'w-full h-16 rounded bg-gray-800 hover:bg-gray-700 flex items-center justify-center p-1'
+    : 'w-full h-16 rounded bg-gray-800 hover:bg-gray-700 flex items-center justify-center p-1 relative'
   
   return (
     <div 
-      className="relative group w-full"
+      className="relative w-full"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -101,25 +147,30 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
               {getIcon()}
               <span className="truncate">{getLabel()}</span>
             </div>
-            <div className="text-xs opacity-70">
+            
+            {/* Track length in bottom left */}
+            <div className="absolute bottom-1 left-1 text-xs opacity-70">
+              {getTrackLength()}
+            </div>
+            
+            {/* Hotkey number in bottom right */}
+            <div className="absolute bottom-1 right-1 text-xs opacity-70">
               {hotkey.bankId}-{hotkey.position}
             </div>
+            
+            {/* Show X icon when in unassign mode */}
+            {isUnassignMode && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded">
+                <X size={24} className="text-red-500" />
+              </div>
+            )}
           </>
         ) : (
-          <div className="text-gray-500 text-sm">
+          <div className="text-gray-500 text-sm absolute bottom-1 right-1">
             {hotkey.bankId}-{hotkey.position}
           </div>
         )}
       </button>
-      
-      {hotkey.assignedItem && (
-        <button
-          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100"
-          onClick={handleClear}
-        >
-          ×
-        </button>
-      )}
     </div>
   )
 }

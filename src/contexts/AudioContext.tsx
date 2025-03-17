@@ -130,6 +130,10 @@ interface AudioContextType {
   clearHotkey: (bankId: number, position: number) => void
   getHotkey: (bankId: number, position: number) => HotKey | undefined
   
+  // Unassign mode
+  isUnassignMode: boolean
+  toggleUnassignMode: () => void
+  
   // Playlists
   playlists: Playlist[]
   createPlaylist: (name: string) => Playlist
@@ -190,6 +194,14 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     
     return initialHotkeys
   })
+  
+  // Unassign mode state
+  const [isUnassignMode, setIsUnassignMode] = useState(false)
+  
+  // Toggle unassign mode
+  const toggleUnassignMode = useCallback(() => {
+    setIsUnassignMode(prev => !prev)
+  }, [])
   
   // Playlists state
   const [playlists, setPlaylists] = useState<Playlist[]>([])
@@ -738,6 +750,9 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     assignToHotkey,
     clearHotkey,
     getHotkey,
+    
+    isUnassignMode,
+    toggleUnassignMode,
     
     playlists,
     createPlaylist,
