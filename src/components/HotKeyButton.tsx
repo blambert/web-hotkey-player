@@ -67,24 +67,27 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
   const getLabel = () => {
     if (!hotkey.assignedItem) return ''
     
+    let label = ''
+    
     if (hotkey.assignedItem.type === 'audio') {
       const audio = getAudioById(hotkey.assignedItem.id)
-      return audio?.name || 'Unknown audio'
+      label = audio?.name || 'Unknown audio'
     } else if (hotkey.assignedItem.type === 'playlist') {
       const playlist = playlists.find(p => p.id === hotkey.assignedItem?.id)
-      return playlist?.name || 'Unknown playlist'
+      label = playlist?.name || 'Unknown playlist'
     }
     
-    return ''
+    // Convert underscores to spaces
+    return label.replace(/_/g, ' ')
   }
   
   const getIcon = () => {
     if (!hotkey.assignedItem) return null
     
     if (hotkey.assignedItem.type === 'audio') {
-      return <Music size={16} className="mr-1 flex-shrink-0" />
+      return <Music size={20} className="mb-1" />
     } else if (hotkey.assignedItem.type === 'playlist') {
-      return <ListMusic size={16} className="mr-1 flex-shrink-0" />
+      return <ListMusic size={20} className="mb-1" />
     }
     
     return null
@@ -122,18 +125,16 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
   }
   
   const buttonClass = hotkey.assignedItem
-    ? `w-full h-16 rounded flex flex-col items-center justify-center p-1 transition-colors relative
+    ? `w-full h-full rounded flex flex-col items-center justify-center p-1 transition-colors relative
        ${isPlaying 
-           ? 'bg-green-700 text-white' 
-           : hotkey.assignedItem.type === 'audio' 
-               ? 'bg-blue-700 hover:bg-blue-600 text-white'
-               : 'bg-green-700 hover:bg-green-600 text-white'
+           ? 'bg-yellow-500 text-black' 
+           : 'bg-blue-700 hover:bg-blue-600 text-white'
        }`
-    : 'w-full h-16 rounded bg-gray-800 hover:bg-gray-700 flex items-center justify-center p-1 relative'
+    : 'w-full h-full rounded bg-gray-800 hover:bg-gray-700 flex items-center justify-center p-1 relative'
   
   return (
     <div 
-      className="relative w-full"
+      className="relative w-full h-full"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -143,9 +144,9 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
       >
         {hotkey.assignedItem ? (
           <>
-            <div className="flex items-center text-xs truncate w-full">
+            <div className="flex flex-col items-center justify-center h-full">
               {getIcon()}
-              <span className="truncate">{getLabel()}</span>
+              <span className="font-bold text-center break-words w-full px-1 text-xs sm:text-sm">{getLabel()}</span>
             </div>
             
             {/* Track length in bottom left */}
@@ -155,7 +156,7 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
             
             {/* Hotkey number in bottom right */}
             <div className="absolute bottom-1 right-1 text-xs opacity-70">
-              {hotkey.bankId}-{hotkey.position}
+              {hotkey.position}
             </div>
             
             {/* Show X icon when in unassign mode */}
@@ -167,7 +168,7 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
           </>
         ) : (
           <div className="text-gray-500 text-sm absolute bottom-1 right-1">
-            {hotkey.bankId}-{hotkey.position}
+            {hotkey.position}
           </div>
         )}
       </button>

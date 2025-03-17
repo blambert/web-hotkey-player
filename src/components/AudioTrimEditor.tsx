@@ -146,6 +146,24 @@ export default function AudioTrimEditor({ audio, onClose }: AudioTrimEditorProps
         </div>
         
         <div className="p-4">
+          {/* Volume Control - Moved to the top */}
+          <div className="mb-4 p-2 bg-gray-700 rounded">
+            <label className="block text-sm font-medium mb-1">Volume</label>
+            <div className="flex items-center space-x-2">
+              <Volume2 size={16} className="text-gray-400" />
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.01" 
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="flex-1 h-2"
+              />
+              <span className="text-white w-12 text-right">{Math.round(volume * 100)}%</span>
+            </div>
+          </div>
+          
           <div className="mb-4">
             <div className="relative h-8 bg-gray-700 rounded-lg overflow-hidden">
               {/* Full audio track */}
@@ -182,24 +200,6 @@ export default function AudioTrimEditor({ audio, onClose }: AudioTrimEditorProps
               <span className="text-gray-400">
                 Original: {formatTime(audio.duration)}
               </span>
-            </div>
-          </div>
-          
-          {/* Volume Control */}
-          <div className="mb-4 p-2 bg-gray-700 rounded">
-            <label className="block text-sm font-medium mb-1">Volume</label>
-            <div className="flex items-center space-x-2">
-              <Volume2 size={16} className="text-gray-400" />
-              <input 
-                type="range" 
-                min="0" 
-                max="1" 
-                step="0.01" 
-                value={volume}
-                onChange={(e) => setVolume(parseFloat(e.target.value))}
-                className="flex-1 h-2"
-              />
-              <span className="text-white w-12 text-right">{Math.round(volume * 100)}%</span>
             </div>
           </div>
           

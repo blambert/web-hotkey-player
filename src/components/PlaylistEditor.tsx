@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAudio } from '../contexts/AudioContext'
-import { useDnd } from '../contexts/DndContext'
-import { Playlist, AudioFile } from '../types'
-import { Music, Trash2, ArrowUp, ArrowDown, X, ListMusic, Plus, Check } from 'lucide-react'
+import { Playlist } from '../types'
+import { X, ArrowUp, ArrowDown, Play, Pause, Save } from 'lucide-react'
 
 interface PlaylistEditorProps {
   playlist: Playlist
@@ -11,285 +10,194 @@ interface PlaylistEditorProps {
 
 export default function PlaylistEditor({ playlist, onClose }: PlaylistEditorProps) {
   const { 
-    audioFiles, 
+    getAudioById, 
     updatePlaylist, 
     removeFromPlaylist, 
     reorderPlaylistItem,
-    addToPlaylist,
-    playbackStatus,
     play,
-    playlists
+    stop,
+    playbackStatus,
+    getEffectiveDuration
   } = useAudio()
   
-  const { draggedItem, setDraggedItem } = useDnd()
-  const [showAddTracksModal, setShowAddTracksModal] = useState(false)
-  const [selectedTracks, setSelectedTracks] = useState<string[]>([])
-  const [currentPlaylist, setCurrentPlaylist] = useState<Playlist>(playlist)
+  const [name, setName] = useState(playlist.name)
   
-  // Update the current playlist when the playlist prop changes or when playlists state changes
+  // Update name when playlist changes
   useEffect(() => {
-    const updatedPlaylist = playlists.find(p => p.id === playlist.id);
-    if (updatedPlaylist) {
-      setCurrentPlaylist(updatedPlaylist);
-    }
-  }, [playlist, playlists]);
+    setName(playlist.name)
+  }, [playlist])
   
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
+  const handleSave = () => {
+    updatePlaylist(playlist.id, { name })
+    onClose()
   }
   
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    
-    if (draggedItem && draggedItem.type === 'audio') {
-      addToPlaylist(currentPlaylist.id, draggedItem.id)
-      setDraggedItem(null)
-    }
-  }
-  
-  const handleRemoveItem = (itemId: string) => {
-    removeFromPlaylist(currentPlaylist.id, itemId)
+  const handleRemove = (itemId: string) => {
+    removeFromPlaylist(playlist.id, itemId)
   }
   
   const handleMoveUp = (index: number) => {
     if (index > 0) {
-      reorderPlaylistItem(currentPlaylist.id, index, index - 1)
+      reorderPlaylistItem(playlist.id, index, index - 1)
     }
   }
   
   const handleMoveDown = (index: number) => {
-    if (index < currentPlaylist.items.length - 1) {
-      reorderPlaylistItem(currentPlaylist.id, index, index + 1)
+    if (index < playlist.items.length - 1) {
+      reorderPlaylistItem(playlist.id, index, index + 1)
     }
   }
   
-  const handlePlaybackModeChange = () => {
-    const newMode = currentPlaylist.playbackMode === 'follow-on' ? 'manual' : 'follow-on'
-    updatePlaylist(currentPlaylist.id, { playbackMode: newMode })
+  const handlePlay = () => {
+    const isCurrentlyPlaying = 
+      playbackStatus.isPlaying && 
+      playbackStatus.currentItem?.type === 'playlist' && 
+      playbackStatus.currentItem.id === playlist.id
+    
+    if (isCurrentlyPlaying) {
+      stop()
+    } else {
+      play({
+        type: 'playlist',
+        id: playlist.id
+      })
+    }
   }
   
-  const openAddTracksModal = () => {
-    setSelectedTracks([])
-    setShowAddTracksModal(true)
-  }
-  
-  const closeAddTracksModal = () => {
-    setShowAddTracksModal(false)
-  }
-  
-  const toggleTrackSelection = (audioId: string) => {
-    setSelectedTracks(prev => 
-      prev.includes(audioId)
-        ? prev.filter(id => id !== audioId)
-        : [...prev, audioId]
-    )
-  }
-  
-  const handleAddSelectedTracks = () => {
-    selectedTracks.forEach(audioId => {
-      addToPlaylist(currentPlaylist.id, audioId)
+  // Calculate total duration
+  const getTotalDuration = () => {
+    let total = 0
+    
+    playlist.items.forEach(item => {
+      const audio = getAudioById(item.audioId)
+      if (audio) {
+        total += getEffectiveDuration(audio)
+      }
     })
-    closeAddTracksModal()
+    
+    return formatTime(total)
   }
   
-  // Get all available audio files (no filtering for duplicates)
-  const availableAudioFiles = audioFiles
+  // Format time as MM:SS
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60)
+    const seconds = Math.floor(time % 60)
+    
+    return `${minutes}:${String(seconds).padStart(2, '0')}`
+  }
+  
+  const isPlaying = 
+    playbackStatus.isPlaying && 
+    playbackStatus.currentItem?.type === 'playlist' && 
+    playbackStatus.currentItem.id === playlist.id
   
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-      <div className="bg-gray-800 rounded-lg w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
-        <div className="p-3 border-b border-gray-700 flex justify-between items-center">
-          <div className="flex items-center">
-            <ListMusic size={18} className="text-green-500 mr-2" />
-            <h2 className="text-lg font-bold">{currentPlaylist.name}</h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-700">
-            <X size={18} />
-          </button>
-        </div>
-        
-        <div 
-          className="flex-1 overflow-y-auto p-3"
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
+    <div className="p-4 bg-gray-800 rounded-lg">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Edit Playlist</h2>
+        <button 
+          className="p-1 rounded-full hover:bg-gray-700"
+          onClick={onClose}
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm text-gray-400">
-              {currentPlaylist.items.length} {currentPlaylist.items.length === 1 ? 'track' : 'tracks'}
-            </div>
-            
-            <div className="flex space-x-2">
-              <button
-                className="px-2 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700 flex items-center"
-                onClick={openAddTracksModal}
-              >
-                <Plus size={12} className="mr-1" />
-                Add Tracks
-              </button>
-              
-              <button
-                className={`px-2 py-1 rounded text-xs ${
-                  currentPlaylist.playbackMode === 'follow-on' 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-yellow-600 text-white'
-                }`}
-                onClick={handlePlaybackModeChange}
-              >
-                {currentPlaylist.playbackMode === 'follow-on' ? 'Follow-on Mode' : 'Manual Mode'}
-              </button>
-            </div>
-          </div>
-          
-          {currentPlaylist.items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-gray-500">
-              <p className="mb-2">No tracks in playlist</p>
-              <p className="text-xs">Drag and drop audio files here or use the Add Tracks button</p>
-            </div>
-          ) : (
-            currentPlaylist.items.map((item, index) => {
-              const audio = audioFiles.find(a => a.id === item.audioId)
-              
-              if (!audio) return null
-              
-              const isPlaying = 
-                playbackStatus.isPlaying && 
-                playbackStatus.currentPlaylistId === currentPlaylist.id &&
-                playbackStatus.currentAudioId === audio.id
-              
-              return (
-                <div 
-                  key={item.id}
-                  className={`p-2 mb-1 rounded ${
-                    isPlaying ? 'bg-blue-900/50 border border-blue-500' : 'bg-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center flex-1">
-                      <div className="text-gray-400 mr-2 w-5 text-center">{index + 1}</div>
-                      <Music size={14} className="text-blue-400 mr-1" />
-                      <div className="text-sm font-medium truncate">{audio.name}</div>
-                    </div>
-                    
-                    <div className="flex space-x-1">
-                      <button 
-                        className={`p-1 rounded hover:bg-gray-600 ${index === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        onClick={() => handleMoveUp(index)}
-                        disabled={index === 0}
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      
-                      <button 
-                        className={`p-1 rounded hover:bg-gray-600 ${index === currentPlaylist.items.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        onClick={() => handleMoveDown(index)}
-                        disabled={index === currentPlaylist.items.length - 1}
-                      >
-                        <ArrowDown size={14} />
-                      </button>
-                      
-                      <button 
-                        className="p-1 rounded hover:bg-gray-600 text-red-400"
-                        onClick={() => handleRemoveItem(item.id)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })
-          )}
+          <X size={20} />
+        </button>
+      </div>
+      
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">
+          Name
+        </label>
+        <input 
+          type="text" 
+          value={name} 
+          onChange={(e) => setName(e.target.value)}
+          className="w-full p-2 bg-gray-700 rounded"
+        />
+      </div>
+      
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-sm font-medium">
+          Tracks ({playlist.items.length}) - {getTotalDuration()}
         </div>
         
-        <div className="p-3 border-t border-gray-700 flex justify-between">
+        <div className="flex gap-2">
           <button 
-            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-            onClick={() => play({ type: 'playlist', id: currentPlaylist.id })}
+            className={`p-2 rounded ${isPlaying ? 'bg-yellow-500 text-black' : 'bg-blue-600 hover:bg-blue-500'}`}
+            onClick={handlePlay}
           >
-            Play Playlist
+            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
           </button>
           
           <button 
-            className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600"
-            onClick={onClose}
+            className="p-2 rounded bg-green-600 hover:bg-green-500"
+            onClick={handleSave}
           >
-            Close
+            <Save size={16} />
           </button>
         </div>
       </div>
       
-      {/* Add Tracks Modal */}
-      {showAddTracksModal && (
-        <div className="fixed inset-0 bg-black/70 z-60 flex items-center justify-center">
-          <div className="bg-gray-800 rounded-lg w-full max-w-md max-h-[70vh] flex flex-col overflow-hidden">
-            <div className="p-3 border-b border-gray-700 flex justify-between items-center">
-              <h2 className="text-lg font-bold">Add Tracks to Playlist</h2>
-              <button onClick={closeAddTracksModal} className="p-1 rounded hover:bg-gray-700">
-                <X size={18} />
-              </button>
-            </div>
+      {playlist.items.length === 0 ? (
+        <div className="text-center py-4 text-gray-400">
+          No tracks in playlist. Drag audio files here.
+        </div>
+      ) : (
+        <div className="max-h-96 overflow-y-auto">
+          {playlist.items.map((item, index) => {
+            const audio = getAudioById(item.audioId)
+            const isCurrentTrack = 
+              isPlaying && 
+              playbackStatus.currentAudioId === item.audioId
             
-            <div className="flex-1 overflow-y-auto p-3">
-              {availableAudioFiles.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-32 text-gray-500">
-                  <p>No available audio files</p>
-                  <p className="text-xs mt-1">Upload some audio files first</p>
-                </div>
-              ) : (
-                <>
-                  <div className="text-sm text-gray-400 mb-2">
-                    Select tracks to add to "{currentPlaylist.name}"
+            return (
+              <div 
+                key={item.id} 
+                className={`
+                  flex items-center justify-between p-2 mb-1 rounded
+                  ${isCurrentTrack 
+                    ? 'bg-yellow-500 text-black' 
+                    : 'bg-gray-700 hover:bg-gray-600'}
+                `}
+              >
+                <div className="flex items-center">
+                  <span className="mr-2 text-sm w-6 text-center">{index + 1}</span>
+                  <div>
+                    <div className="font-medium">{audio?.name.replace(/_/g, ' ') || 'Unknown'}</div>
+                    {audio && (
+                      <div className="text-xs opacity-70">
+                        {formatTime(getEffectiveDuration(audio))}
+                      </div>
+                    )}
                   </div>
-                  
-                  {availableAudioFiles.map(audio => (
-                    <div 
-                      key={audio.id}
-                      className={`p-2 mb-1 rounded flex items-center cursor-pointer ${
-                        selectedTracks.includes(audio.id) ? 'bg-blue-900/50 border border-blue-500' : 'bg-gray-700 hover:bg-gray-650'
-                      }`}
-                      onClick={() => toggleTrackSelection(audio.id)}
-                    >
-                      <div className="w-6 flex justify-center">
-                        {selectedTracks.includes(audio.id) ? (
-                          <Check size={16} className="text-blue-400" />
-                        ) : null}
-                      </div>
-                      
-                      <div className="flex items-center flex-1">
-                        <Music size={14} className="text-blue-400 mr-1" />
-                        <div className="text-sm font-medium truncate">{audio.name}</div>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-            
-            <div className="p-3 border-t border-gray-700 flex justify-between">
-              <div className="text-sm text-gray-400">
-                {selectedTracks.length} selected
-              </div>
-              
-              <div className="flex space-x-2">
-                <button 
-                  className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600"
-                  onClick={closeAddTracksModal}
-                >
-                  Cancel
-                </button>
+                </div>
                 
-                <button 
-                  className={`px-4 py-2 rounded bg-blue-600 text-white ${
-                    selectedTracks.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
-                  }`}
-                  onClick={handleAddSelectedTracks}
-                  disabled={selectedTracks.length === 0}
-                >
-                  Add Selected
-                </button>
+                <div className="flex gap-1">
+                  <button 
+                    className="p-1 rounded hover:bg-gray-500"
+                    onClick={() => handleMoveUp(index)}
+                    disabled={index === 0}
+                  >
+                    <ArrowUp size={16} className={index === 0 ? 'opacity-50' : ''} />
+                  </button>
+                  
+                  <button 
+                    className="p-1 rounded hover:bg-gray-500"
+                    onClick={() => handleMoveDown(index)}
+                    disabled={index === playlist.items.length - 1}
+                  >
+                    <ArrowDown size={16} className={index === playlist.items.length - 1 ? 'opacity-50' : ''} />
+                  </button>
+                  
+                  <button 
+                    className="p-1 rounded hover:bg-red-500"
+                    onClick={() => handleRemove(item.id)}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
+            )
+          })}
         </div>
       )}
     </div>

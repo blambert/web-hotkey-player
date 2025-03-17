@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useAudio } from '../contexts/AudioContext'
 import { useDnd } from '../contexts/DndContext'
 import { AudioFile } from '../types'
-import { Music, Play, Trash2, Clock, Scissors } from 'lucide-react'
+import { Music, Play, Trash2, Clock, Edit } from 'lucide-react'
 import AudioTrimEditor from './AudioTrimEditor'
 
 export default function AudioLibrary() {
@@ -180,7 +180,7 @@ export default function AudioLibrary() {
                     className="p-1 rounded hover:bg-gray-600"
                     onClick={() => setEditingAudio(audio)}
                   >
-                    <Scissors size={14} />
+                    <Edit size={14} />
                   </button>
                   
                   <button 
@@ -207,14 +207,6 @@ export default function AudioLibrary() {
                   {audio.volume < 1 ? `${Math.round(audio.volume * 100)}%` : "100%"}
                 </div>
               </div>
-              
-              {audio.trimHead > 0 || audio.trimTail > 0 ? (
-                <div className="mt-1 text-xs text-yellow-500">
-                  Trimmed: {audio.trimHead > 0 ? `Head: ${audio.trimHead.toFixed(2)}s` : ''}
-                  {audio.trimHead > 0 && audio.trimTail > 0 ? ' | ' : ''}
-                  {audio.trimTail > 0 ? `Tail: ${audio.trimTail.toFixed(2)}s` : ''}
-                </div>
-              ) : null}
             </div>
           );
         })}

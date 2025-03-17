@@ -45,16 +45,16 @@ export default function HotKeyPanel() {
   }, [currentBankHotkeys])
   
   return (
-    <div className="p-6">
+    <div className="p-6 flex flex-col h-full">
       <BankSelector 
         banks={banks}
         currentBank={currentBank}
         setCurrentBank={setCurrentBank}
       />
       
-      <div className="mt-4">
+      <div className="mt-4 flex-grow grid grid-rows-4 gap-2">
         {gridLayout.map((row, rowIndex) => (
-          <div key={`row-${rowIndex}`} className="grid grid-cols-6 gap-2 mb-2">
+          <div key={`row-${rowIndex}`} className="grid grid-cols-6 gap-2 h-full">
             {row.map((hotkey) => (
               <HotKeyButton 
                 key={hotkey?.id} 

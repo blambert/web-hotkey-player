@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { AudioFile, Playlist, PlaybackStatus, AssignedItem, HotKey } from '../types'
+import { dbService } from '../services/dbService'
 
 // Default values
 const NUM_BANKS = 6
@@ -158,6 +159,9 @@ interface AudioContextType {
   setHeadTrim: (audioId: string, seconds: number) => void
   setTailTrim: (audioId: string, seconds: number) => void
   getEffectiveDuration: (audioFile: AudioFile) => number
+  
+  // Data loading state
+  isLoading: boolean
 }
 
 const AudioContext = createContext<AudioContextType | null>(null)
@@ -217,8 +221,24 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     loop: false
   })
   
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true)
+  
   // Audio player reference
   const audioPlayerRef = useRef<AudioPlayer | null>(null)
+  
+  // Audio blob URLs map to keep track of created URLs
+  const audioBlobUrlsRef = useRef<Map<string, string>>(new Map())
+  
+  // Revoke object URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      // Revoke all blob URLs when component unmounts
+      audioBlobUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+    };
+  }, []);
   
   // Initialize audio player
   useEffect(() => {
@@ -311,6 +331,87 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     }
   }, [playbackStatus, playlists])
   
+  // Load data from IndexedDB on initialization
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        
+        // Initialize the database
+        await dbService.initDB();
+        
+        // Load audio files
+        const savedAudioFiles = await dbService.getAllAudioFiles();
+        if (savedAudioFiles.length > 0) {
+          // Create blob URLs for each audio file
+          savedAudioFiles.forEach(audioFile => {
+            // Store the blob URL in our ref map
+            audioBlobUrlsRef.current.set(audioFile.id, audioFile.src);
+          });
+          
+          setAudioFiles(savedAudioFiles);
+        }
+        
+        // Load hotkeys
+        const savedHotkeys = await dbService.getAllHotkeys();
+        if (savedHotkeys.length > 0) {
+          setHotkeys(savedHotkeys);
+        }
+        
+        // Load playlists
+        const savedPlaylists = await dbService.getAllPlaylists();
+        if (savedPlaylists.length > 0) {
+          setPlaylists(savedPlaylists);
+        }
+        
+        // Load app state
+        const appState = await dbService.getAppState();
+        if (appState) {
+          setCurrentBank(appState.currentBank);
+          
+          // Only restore loop state from playback status
+          setPlaybackStatus(prev => ({
+            ...prev,
+            loop: appState.playbackStatus.loop || false
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load data from IndexedDB:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    loadData();
+  }, []);
+  
+  // Save current bank to IndexedDB when it changes
+  useEffect(() => {
+    if (isLoading) return;
+    
+    dbService.saveAppState(currentBank, playbackStatus).catch(error => {
+      console.error('Failed to save app state:', error);
+    });
+  }, [currentBank, playbackStatus.loop, isLoading]);
+  
+  // Save hotkeys to IndexedDB when they change
+  useEffect(() => {
+    if (isLoading) return;
+    
+    dbService.saveHotkeys(hotkeys).catch(error => {
+      console.error('Failed to save hotkeys:', error);
+    });
+  }, [hotkeys, isLoading]);
+  
+  // Save playlists to IndexedDB when they change
+  useEffect(() => {
+    if (isLoading) return;
+    
+    dbService.savePlaylists(playlists).catch(error => {
+      console.error('Failed to save playlists:', error);
+    });
+  }, [playlists, isLoading]);
+  
   // Calculate effective duration (accounting for trims)
   const getEffectiveDuration = useCallback((audioFile: AudioFile): number => {
     if (!audioFile) return 0;
@@ -326,14 +427,23 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     return new Promise((resolve, reject) => {
       const fileReader = new FileReader()
       
-      fileReader.onload = () => {
+      fileReader.onload = async () => {
         const audio = new Audio()
         
-        audio.onloadedmetadata = () => {
+        audio.onloadedmetadata = async () => {
+          const fileData = fileReader.result as ArrayBuffer;
+          
+          // Create a blob from the file data
+          const blob = new Blob([fileData], { type: file.type });
+          
+          // Create a blob URL for the audio element
+          const blobUrl = URL.createObjectURL(blob);
+          
+          // Create a new audio file object
           const newAudioFile: AudioFile = {
             id: uuidv4(),
             name: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
-            src: URL.createObjectURL(file),
+            src: blobUrl,
             duration: audio.duration,
             volume: 1,
             type: file.type,
@@ -341,23 +451,36 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
             trimTail: 0
           }
           
-          setAudioFiles(prev => [...prev, newAudioFile])
-          resolve(newAudioFile)
+          try {
+            // Store the blob URL in our ref map
+            audioBlobUrlsRef.current.set(newAudioFile.id, blobUrl);
+            
+            // Save to IndexedDB
+            await dbService.saveAudioFile(newAudioFile, fileData);
+            
+            // Update state
+            setAudioFiles(prev => [...prev, newAudioFile]);
+            
+            resolve(newAudioFile);
+          } catch (error) {
+            console.error('Failed to save audio file to IndexedDB:', error);
+            reject(error);
+          }
         }
         
         audio.onerror = () => {
-          reject(new Error('Failed to load audio file'))
+          reject(new Error('Failed to load audio file'));
         }
         
-        audio.src = URL.createObjectURL(file)
+        audio.src = URL.createObjectURL(file);
       }
       
       fileReader.onerror = () => {
-        reject(new Error('Failed to read file'))
+        reject(new Error('Failed to read file'));
       }
       
-      fileReader.readAsArrayBuffer(file)
-    })
+      fileReader.readAsArrayBuffer(file);
+    });
   }, [])
   
   // Get audio by ID
@@ -367,40 +490,61 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
   
   // Update audio file
   const updateAudioFile = useCallback((id: string, updates: Partial<AudioFile>) => {
-    setAudioFiles(prev => 
-      prev.map(audio => 
+    setAudioFiles(prev => {
+      const updatedFiles = prev.map(audio => 
         audio.id === id ? { ...audio, ...updates } : audio
-      )
-    )
+      );
+      
+      // Save the update to IndexedDB
+      dbService.updateAudioFile(id, updates).catch(error => {
+        console.error('Failed to update audio file in IndexedDB:', error);
+      });
+      
+      return updatedFiles;
+    });
   }, [])
   
   // Delete audio file
-  const deleteAudioFile = useCallback((id: string) => {
-    // Remove from hotkeys
-    setHotkeys(prev => 
-      prev.map(hotkey => 
-        hotkey.assignedItem?.type === 'audio' && hotkey.assignedItem.id === id 
-          ? { ...hotkey, assignedItem: null } 
-          : hotkey
-      )
-    )
-    
-    // Remove from playlists
-    setPlaylists(prev => 
-      prev.map(playlist => ({
-        ...playlist,
-        items: playlist.items.filter(item => item.audioId !== id)
-      }))
-    )
-    
-    // Remove from audio files
-    setAudioFiles(prev => prev.filter(audio => audio.id !== id))
-    
-    // Stop playback if playing this file
-    if (playbackStatus.currentAudioId === id) {
-      stop()
+  const deleteAudioFile = useCallback(async (id: string) => {
+    try {
+      // Remove from IndexedDB
+      await dbService.deleteAudioFile(id);
+      
+      // Get the blob URL from our ref map and revoke it
+      const blobUrl = audioBlobUrlsRef.current.get(id);
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+        audioBlobUrlsRef.current.delete(id);
+      }
+      
+      // Remove from hotkeys
+      setHotkeys(prev => 
+        prev.map(hotkey => 
+          hotkey.assignedItem?.type === 'audio' && hotkey.assignedItem.id === id 
+            ? { ...hotkey, assignedItem: null } 
+            : hotkey
+        )
+      );
+      
+      // Remove from playlists
+      setPlaylists(prev => 
+        prev.map(playlist => ({
+          ...playlist,
+          items: playlist.items.filter(item => item.audioId !== id)
+        }))
+      );
+      
+      // Remove from audio files
+      setAudioFiles(prev => prev.filter(audio => audio.id !== id));
+      
+      // Stop playback if playing this file
+      if (playbackStatus.currentAudioId === id) {
+        stop();
+      }
+    } catch (error) {
+      console.error('Failed to delete audio file:', error);
     }
-  }, [playbackStatus])
+  }, [playbackStatus, audioFiles])
   
   // Assign to hotkey
   const assignToHotkey = useCallback((bankId: number, position: number, item: AssignedItem) => {
@@ -439,11 +583,10 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     }
     
     setPlaylists(prev => [...prev, newPlaylist])
-    return newPlaylist
-  }, [])
+    return newPlaylist  }, [])
   
   // Update playlist
-  const updatePlaylist = useCallback((id: string, updates:Partial<Playlist>) => {
+  const updatePlaylist = useCallback((id: string, updates: Partial<Playlist>) => {
     setPlaylists(prev => 
       prev.map(playlist => 
         playlist.id === id ? { ...playlist, ...updates } : playlist
@@ -683,24 +826,31 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     setAudioFiles(prev => 
       prev.map(audio => {
         if (audio.id === audioId) {
+          const newHeadTrim = Math.max(0, Math.min(seconds, audio.duration - (audio.trimTail || 0) - 0.1));
+          
+          // Update IndexedDB
+          dbService.updateAudioFile(audioId, { trimHead: newHeadTrim }).catch(error => {
+            console.error('Failed to update head trim in IndexedDB:', error);
+          });
+          
           return {
             ...audio,
-            trimHead: Math.max(0, Math.min(seconds, audio.duration - (audio.trimTail || 0) - 0.1))
-          }
+            trimHead: newHeadTrim
+          };
         }
-        return audio
+        return audio;
       })
-    )
+    );
     
     // Update current playback if this audio is playing
     if (playbackStatus.currentAudioId === audioId && audioPlayerRef.current) {
-      const audio = audioFiles.find(a => a.id === audioId)
+      const audio = audioFiles.find(a => a.id === audioId);
       if (audio) {
-        const newHeadTrim = Math.max(0, Math.min(seconds, audio.duration - (audio.trimTail || 0) - 0.1))
+        const newHeadTrim = Math.max(0, Math.min(seconds, audio.duration - (audio.trimTail || 0) - 0.1));
         
-        const currentTime = audioPlayerRef.current.getCurrentTime()
+        const currentTime = audioPlayerRef.current.getCurrentTime();
         if (currentTime < newHeadTrim) {
-          audioPlayerRef.current.setCurrentTime(newHeadTrim)
+          audioPlayerRef.current.setCurrentTime(newHeadTrim);
         }
       }
     }
@@ -711,20 +861,27 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     setAudioFiles(prev => 
       prev.map(audio => {
         if (audio.id === audioId) {
+          const newTailTrim = Math.max(0, Math.min(seconds, audio.duration - (audio.trimHead || 0) - 0.1));
+          
+          // Update IndexedDB
+          dbService.updateAudioFile(audioId, { trimTail: newTailTrim }).catch(error => {
+            console.error('Failed to update tail trim in IndexedDB:', error);
+          });
+          
           return {
             ...audio,
-            trimTail: Math.max(0, Math.min(seconds, audio.duration - (audio.trimHead || 0) - 0.1))
-          }
+            trimTail: newTailTrim
+          };
         }
-        return audio
+        return audio;
       })
-    )
+    );
     
     // If this audio is currently playing, we need to update the tail trim in the player
     if (playbackStatus.currentAudioId === audioId && audioPlayerRef.current) {
-      const audio = audioFiles.find(a => a.id === audioId)
+      const audio = audioFiles.find(a => a.id === audioId);
       if (audio) {
-        const newTailTrim = Math.max(0, Math.min(seconds, audio.duration - (audio.trimHead || 0) - 0.1))
+        const newTailTrim = Math.max(0, Math.min(seconds, audio.duration - (audio.trimHead || 0) - 0.1));
         
         // We need to update the player's tail trim value
         if (audioPlayerRef.current) {
@@ -774,7 +931,9 @@ export function AudioContextProvider({ children }: { children: React.ReactNode }
     
     setHeadTrim,
     setTailTrim,
-    getEffectiveDuration
+    getEffectiveDuration,
+    
+    isLoading
   }
   
   return (

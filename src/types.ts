@@ -1,42 +1,33 @@
+// Audio file type
 export interface AudioFile {
   id: string
   name: string
   src: string
   duration: number
   volume: number
-  type: 'audio/mpeg' | 'audio/wav' | string
-  trimHead: number
-  trimTail: number
+  type: string
+  trimHead?: number
+  trimTail?: number
 }
 
-export interface HotKey {
+// Playlist item type
+export interface PlaylistItem {
   id: string
-  bankId: number
-  position: number
-  assignedItem: AssignedItem | null
+  audioId: string
 }
 
-export type AssignedItem = {
-  id: string
-  type: 'audio' | 'playlist'
-}
-
+// Playlist type
 export interface Playlist {
   id: string
   name: string
-  items: Array<{
-    audioId: string
-    id: string
-  }>
-  playbackMode: 'manual' | 'follow-on'
+  items: PlaylistItem[]
+  playbackMode: 'follow-on' // Removed 'manual' option
 }
 
+// Playback status type
 export interface PlaybackStatus {
   isPlaying: boolean
-  currentItem: {
-    id: string
-    type: 'audio' | 'playlist'
-  } | null
+  currentItem: AssignedItem | null
   currentAudioId: string | null
   elapsedTime: number
   currentPlaylistId: string | null
@@ -44,9 +35,30 @@ export interface PlaybackStatus {
   loop: boolean
 }
 
-export interface DragItem {
-  type: 'audio' | 'playlist' | 'playlistItem'
+// Assigned item type (for hotkeys)
+export interface AssignedItem {
+  type: 'audio' | 'playlist'
   id: string
-  index?: number
-  sourceContainerId?: string
+}
+
+// Hotkey type
+export interface HotKey {
+  id: string
+  bankId: number
+  position: number
+  assignedItem: AssignedItem | null
+}
+
+// Draggable item type
+export interface DraggableItem {
+  id: string
+  type: string
+}
+
+// App state type
+export interface AppState {
+  currentBank: number
+  playbackStatus: {
+    loop: boolean
+  }
 }
