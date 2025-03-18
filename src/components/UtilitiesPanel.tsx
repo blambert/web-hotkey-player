@@ -1,72 +1,57 @@
-import { useRef, useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAudio } from '../contexts/AudioContext'
-import { Download, Upload, Settings, AlertCircle, X } from 'lucide-react'
-import { AudioFile, HotKey } from '../types'
-
-interface ExportData {
-  version: string
-  exportDate: string
-  hotkeys: HotKey[]
-  playlists: any[]
-  audioSettings: {
-    filename: string
-    id: string
-    trimHead: number
-    trimTail: number
-    volume: number
-  }[]
-}
+import { AudioFile, Playlist, PlaylistItem, HotKey } from '../types'
+import { Download, Upload, Save, RefreshCw, Trash2 } from 'lucide-react'
 
 export default function UtilitiesPanel() {
   const { 
     audioFiles, 
     hotkeys, 
     playlists,
-    updateAudioFile,
-    setHeadTrim,
-    setTailTrim,
+    createPlaylist,
+    updatePlaylist,
+    addToPlaylist,
     assignToHotkey,
-    clearHotkey,
+    addAudioFile,
     isUnassignMode,
     toggleUnassignMode
   } = useAudio()
   
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [importStatus, setImportStatus] = useState<{
-    message: string
-    type: 'info' | 'success' | 'error'
-  } | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
   
-  const handleExport = () => {
+  // Export data as JSON file
+  const handleExport = async () => {
     try {
-      // Create export data object
-      const exportData: ExportData = {
-        version: '1.0',
-        exportDate: new Date().toISOString(),
-        hotkeys: hotkeys,
-        playlists: playlists,
-        audioSettings: audioFiles.map(audio => ({
-          filename: audio.name,
+      setIsExporting(true)
+      
+      // Create export data object - we only include necessary data
+      const exportData = {
+        audioFiles: audioFiles.map(audio => ({
           id: audio.id,
-          trimHead: audio.trimHead || 0,
-          trimTail: audio.trimTail || 0,
-          volume: audio.volume || 1
-        }))
+          name: audio.name,
+          duration: audio.duration,
+          volume: audio.volume,
+          type: audio.type,
+          trimHead: audio.trimHead,
+          trimTail: audio.trimTail
+        })),
+        hotkeys: hotkeys.filter(hotkey => hotkey.assignedItem !== null),
+        playlists
       }
       
-      // Convert to JSON
+      // Convert to JSON string
       const jsonString = JSON.stringify(exportData, null, 2)
       
-      // Create a blob and download link
+      // Create blob and download
       const blob = new Blob([jsonString], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       
-      // Create download link
+      // Create link and trigger download
       const a = document.createElement('a')
       a.href = url
-      a.download = `audio-player-settings-${new Date().toISOString().split('T')[0]}.json`
-      
-      // Append to body, click, and remove
+      a.download = `soundboard-export-${new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(a)
       a.click()
       
@@ -75,271 +60,230 @@ export default function UtilitiesPanel() {
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
       }, 100)
-      
-      setImportStatus({
-        message: 'Settings exported successfully!',
-        type: 'success'
-      })
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setImportStatus(null)
-      }, 3000)
     } catch (error) {
-      console.error('Export error:', error)
-      setImportStatus({
-        message: `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        type: 'error'
-      })
+      console.error('Export failed:', error)
+      alert('Export failed. Please try again.')
+    } finally {
+      setIsExporting(false)
     }
   }
   
+  // Trigger file input for import
   const handleImportClick = () => {
     fileInputRef.current?.click()
   }
   
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    
-    if (files && files.length > 0) {
-      const file = files[0]
+  // Process imported file
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setIsImporting(true)
       
-      try {
-        const text = await file.text()
-        const importData = JSON.parse(text) as ExportData
-        
-        // Validate the import data structure
-        if (!importData.version || !importData.hotkeys || !importData.playlists || !importData.audioSettings) {
-          setImportStatus({
-            message: 'Invalid import file format',
-            type: 'error'
-          })
-          return
-        }
-        
-        // Start the import process
-        await importSettings(importData)
-        
-      } catch (error) {
-        console.error('Import error:', error)
-        setImportStatus({
-          message: `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          type: 'error'
-        })
+      const file = e.target.files?.[0]
+      if (!file) return
+      
+      // Read file
+      const text = await file.text()
+      const importData = JSON.parse(text)
+      
+      // Validate import data
+      if (!importData.audioFiles || !Array.isArray(importData.audioFiles)) {
+        throw new Error('Invalid import data: missing audio files')
       }
       
-      // Reset file input
-      e.target.value = ''
-    }
-  }
-  
-  const importSettings = async (importData: ExportData) => {
-    setImportStatus({
-      message: 'Importing settings...',
-      type: 'info'
-    })
-    
-    try {
-      // 1. Create a map of filenames to current audio file IDs
-      const filenameToAudioMap = new Map<string, AudioFile>()
-      audioFiles.forEach(audio => {
-        filenameToAudioMap.set(audio.name, audio)
-      })
+      // Import audio files first
+      const audioIdMap = new Map<string, string>() // Map old IDs to new IDs
       
-      // Map of old IDs to new IDs for updating references
-      const idMap = new Map<string, string>()
-      
-      // 2. Apply audio settings based on filename matching
-      let appliedSettings = 0
-      let missingFiles = 0
-      
-      importData.audioSettings.forEach(setting => {
-        const matchingAudio = filenameToAudioMap.get(setting.filename)
-        
-        if (matchingAudio) {
-          // Store ID mapping
-          idMap.set(setting.id, matchingAudio.id)
+      // Import audio files
+      for (const importedAudio of importData.audioFiles) {
+        try {
+          // Create a dummy file to represent the imported audio
+          // This is just a placeholder as we don't have the actual audio data
+          const dummyFile = new File(
+            ['(Audio content not available in import)'], 
+            importedAudio.name + '.mp3', 
+            { type: importedAudio.type || 'audio/mpeg' }
+          )
           
-          // Apply trim and volume settings
-          setHeadTrim(matchingAudio.id, setting.trimHead)
-          setTailTrim(matchingAudio.id, setting.trimTail)
-          updateAudioFile(matchingAudio.id, { volume: setting.volume })
+          // Add the audio file to the system
+          const newAudio = await addAudioFile(dummyFile)
           
-          appliedSettings++
-        } else {
-          missingFiles++
+          // Update audio properties
+          newAudio.duration = importedAudio.duration || 0
+          newAudio.volume = importedAudio.volume || 1
+          newAudio.trimHead = importedAudio.trimHead || 0
+          newAudio.trimTail = importedAudio.trimTail || 0
+          
+          // Map the old ID to the new ID
+          audioIdMap.set(importedAudio.id, newAudio.id)
+        } catch (error) {
+          console.error(`Failed to import audio file ${importedAudio.name}:`, error)
+          // Continue with other files
         }
-      })
+      }
       
-      // 3. Apply hotkey assignments
-      // First clear all hotkeys (in case we're reassigning)
-      hotkeys.forEach(hotkey => {
-        clearHotkey(hotkey.bankId, hotkey.position)
-      })
-      
-      // Then apply imported hotkeys
-      let appliedHotkeys = 0
-      importData.hotkeys.forEach(hotkey => {
-        if (hotkey.assignedItem) {
-          const originalItemId = hotkey.assignedItem.id
-          const newItemId = idMap.get(originalItemId)
-          
-          if (newItemId && hotkey.assignedItem.type === 'audio') {
-            // Assign with the new ID
-            assignToHotkey(hotkey.bankId, hotkey.position, {
-              type: 'audio',
-              id: newItemId
+      // Import playlists
+      if (importData.playlists && Array.isArray(importData.playlists)) {
+        for (const importedPlaylist of importData.playlists) {
+          try {
+            // Create new playlist
+            const newPlaylist = createPlaylist(importedPlaylist.name)
+            
+            // Add items to playlist with mapped audio IDs
+            if (importedPlaylist.items && Array.isArray(importedPlaylist.items)) {
+              for (const item of importedPlaylist.items) {
+                const newAudioId = audioIdMap.get(item.audioId)
+                if (newAudioId) {
+                  addToPlaylist(newPlaylist.id, newAudioId)
+                }
+              }
+            }
+            
+            // Update playlist properties
+            updatePlaylist(newPlaylist.id, {
+              playbackMode: importedPlaylist.playbackMode || 'follow-on'
             })
-            appliedHotkeys++
-          } else if (hotkey.assignedItem.type === 'playlist') {
-            // Playlists will be handled separately
-            // We'll import them later in the correct order
+          } catch (error) {
+            console.error(`Failed to import playlist ${importedPlaylist.name}:`, error)
+            // Continue with other playlists
           }
         }
-      })
+      }
       
-      // 4. Import playlists
-      // This is more complex and would need a separate function to handle
-      // rebuilding the playlists with the new audio file IDs
-      let importedPlaylists = 0
-      
-      // This would need to be implemented to handle playlists properly
-      
-      // 5. Report success with stats
-      setImportStatus({
-        message: `Import successful! Applied settings to ${appliedSettings} files, ${appliedHotkeys} hotkeys. ${missingFiles} files were missing.`,
-        type: 'success'
-      })
-      
-    } catch (error) {
-      console.error('Error during import:', error)
-      setImportStatus({
-        message: `Import error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        type: 'error'
-      })
-    }
-  }
-  
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-  }
-  
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
-    const files = e.dataTransfer.files
-    
-    if (files && files.length > 0) {
-      const file = files[0]
-      
-      if (file.type === 'application/json' || file.name.endsWith('.json')) {
-        try {
-          const text = await file.text()
-          const importData = JSON.parse(text) as ExportData
-          
-          await importSettings(importData)
-        } catch (error) {
-          console.error('Import error:', error)
-          setImportStatus({
-            message: `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            type: 'error'
-          })
+      // Import hotkeys
+      if (importData.hotkeys && Array.isArray(importData.hotkeys)) {
+        for (const importedHotkey of importData.hotkeys) {
+          try {
+            if (!importedHotkey.assignedItem) continue
+            
+            const assignedItem = importedHotkey.assignedItem
+            let newAssignedItem = null
+            
+            if (assignedItem.type === 'audio') {
+              const newAudioId = audioIdMap.get(assignedItem.id)
+              if (newAudioId) {
+                newAssignedItem = {
+                  type: 'audio',
+                  id: newAudioId
+                }
+              }
+            } else if (assignedItem.type === 'playlist') {
+              // Note: We currently don't map playlist IDs, so playlist assignments won't work
+              // This would require mapping playlist IDs similar to audio IDs
+              console.warn('Playlist hotkey assignments not supported in import')
+            }
+            
+            if (newAssignedItem) {
+              assignToHotkey(
+                importedHotkey.bankId, 
+                importedHotkey.position, 
+                newAssignedItem
+              )
+            }
+          } catch (error) {
+            console.error(`Failed to import hotkey:`, error)
+            // Continue with other hotkeys
+          }
         }
-      } else {
-        setImportStatus({
-          message: 'Please drop a JSON settings file',
-          type: 'error'
-        })
+      }
+      
+      alert('Import completed. Note: Audio files are placeholders only, you will need to add the actual audio files separately.')
+    } catch (error) {
+      console.error('Import failed:', error)
+      alert('Import failed. Please check the file format and try again.')
+    } finally {
+      setIsImporting(false)
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
       }
     }
   }
   
   return (
-    <div 
-      className="p-2 flex flex-col"
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
-      <div className="flex items-center mb-3">
-        <Settings size={16} className="text-purple-400 mr-2" />
-        <h2 className="text-md font-semibold">Utilities</h2>
-      </div>
-      
-      <div className="space-y-3">
-        <div className="p-3 bg-gray-800 rounded">
-          <h3 className="text-sm font-medium mb-2">Hotkey Management</h3>
-          <button
-            className={`w-full px-3 py-2 ${isUnassignMode 
-              ? 'bg-red-600 hover:bg-red-700' 
-              : 'bg-gray-700 hover:bg-gray-600'} text-white rounded flex items-center justify-center`}
+    <div className="p-4">
+      <div className="space-y-4">
+        <div>
+          <button 
+            className={`w-full p-2 rounded ${
+              isUnassignMode 
+                ? 'bg-red-600 hover:bg-red-500' 
+                : 'bg-gray-600 hover:bg-gray-500'
+            } flex items-center justify-center`}
             onClick={toggleUnassignMode}
           >
-            <X size={16} className="mr-2" />
-            {isUnassignMode ? 'Exit Unassign Mode' : 'Unassign Hotkeys'}
+            {isUnassignMode ? (
+              <>
+                <Trash2 size={16} className="mr-2" />
+                Cancel Unassign
+              </>
+            ) : (
+              <>
+                <Trash2 size={16} className="mr-2" />
+                Unassign Hotkeys
+              </>
+            )}
           </button>
-          {isUnassignMode && (
-            <p className="text-xs text-red-400 mt-2">
-              Click on any hotkey to unassign it
-            </p>
-          )}
+          <p className="text-xs text-gray-400 mt-1">
+            {isUnassignMode 
+              ? 'Click on any hotkey to unassign it.' 
+              : 'Enable unassign mode to remove hotkey assignments.'}
+          </p>
         </div>
         
-        <div className="p-3 bg-gray-800 rounded">
-          <h3 className="text-sm font-medium mb-2">Export Settings</h3>
-          <p className="text-xs text-gray-400 mb-3">
-            Save your hotkeys, playlists, and audio settings to a file that you can import later.
-          </p>
-          <button
-            className="w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center"
+        <div>
+          <button 
+            className="w-full p-2 rounded bg-blue-600 hover:bg-blue-500 flex items-center justify-center"
             onClick={handleExport}
+            disabled={isExporting}
           >
-            <Download size={16} className="mr-2" />
-            Export Settings
+            {isExporting ? (
+              <>
+                <RefreshCw size={16} className="mr-2 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download size={16} className="mr-2" />
+                Export Settings
+              </>
+            )}
           </button>
-        </div>
-        
-        <div className="p-3 bg-gray-800 rounded">
-          <h3 className="text-sm font-medium mb-2">Import Settings</h3>
-          <p className="text-xs text-gray-400 mb-3">
-            Restore your settings from a previously exported file. Audio files are matched by filename.
+          <p className="text-xs text-gray-400 mt-1">
+            Export your hotkeys, playlists, and audio settings.
           </p>
-          <button
-            className="w-full px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center justify-center"
-            onClick={handleImportClick}
-          >
-            <Upload size={16} className="mr-2" />
-            Import Settings
-          </button>
-          
-          <input 
-            type="file" 
-            ref={fileInputRef}
-            className="hidden"
-            accept="application/json"
-            onChange={handleFileChange}
-          />
-          
-          <div className="mt-2 text-xs text-center text-gray-400">
-            Or drop a settings file here
-          </div>
         </div>
         
-        {importStatus && (
-          <div className={`p-3 rounded text-sm ${
-            importStatus.type === 'error' 
-              ? 'bg-red-900/50 text-red-300' 
-              : importStatus.type === 'success'
-                ? 'bg-green-900/50 text-green-300'
-                : 'bg-blue-900/50 text-blue-300'
-          }`}>
-            <div className="flex items-center">
-              <AlertCircle size={16} className="mr-2 flex-shrink-0" />
-              <span>{importStatus.message}</span>
-            </div>
-          </div>
-        )}
+        <div>
+          <button 
+            className="w-full p-2 rounded bg-green-600 hover:bg-green-500 flex items-center justify-center"
+            onClick={handleImportClick}
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <>
+                <RefreshCw size={16} className="mr-2 animate-spin" />
+                Importing...
+              </>
+            ) : (
+              <>
+                <Upload size={16} className="mr-2" />
+                Import Settings
+              </>
+            )}
+          </button>
+          <p className="text-xs text-gray-400 mt-1">
+            Import hotkeys, playlists, and audio settings from a previous export.
+          </p>
+        </div>
+        
+        <input 
+          type="file" 
+          ref={fileInputRef}
+          className="hidden"
+          accept=".json"
+          onChange={handleImport}
+        />
       </div>
     </div>
   )

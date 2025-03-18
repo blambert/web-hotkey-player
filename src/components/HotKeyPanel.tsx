@@ -11,7 +11,7 @@ export default function HotKeyPanel() {
     currentBank, 
     setCurrentBank, 
     hotkeys,
-    playbackStatus 
+    playbackStatus
   } = useAudio()
   
   const { draggedItem } = useDnd()
@@ -46,11 +46,13 @@ export default function HotKeyPanel() {
   
   return (
     <div className="p-6 flex flex-col h-full">
-      <BankSelector 
-        banks={banks}
-        currentBank={currentBank}
-        setCurrentBank={setCurrentBank}
-      />
+      <div className="flex justify-between items-center">
+        <BankSelector 
+          banks={banks}
+          currentBank={currentBank}
+          setCurrentBank={setCurrentBank}
+        />
+      </div>
       
       <div className="mt-4 flex-grow grid grid-rows-4 gap-2">
         {gridLayout.map((row, rowIndex) => (

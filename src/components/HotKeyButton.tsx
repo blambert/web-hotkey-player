@@ -22,23 +22,35 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
     isUnassignMode
   } = useAudio()
   
-  const { draggedItem, setDraggedItem } = useDnd()
+  const { draggedItem, setDraggedItem, selectedItem, setSelectedItem } = useDnd()
   
   if (!hotkey) return null
   
   const handleClick = () => {
-    if (!hotkey.assignedItem) return
-    
-    // If in unassign mode, clear the hotkey instead of playing
-    if (isUnassignMode) {
+    if (isUnassignMode && hotkey.assignedItem) {
+      // In unassign mode, clear the hotkey
       clearHotkey(hotkey.bankId, hotkey.position)
       return
     }
     
-    if (isPlaying) {
-      stop()
-    } else {
-      play(hotkey.assignedItem)
+    if (selectedItem && !hotkey.assignedItem) {
+      // If an item is selected and this hotkey is empty, assign the selected item
+      assignToHotkey(hotkey.bankId, hotkey.position, {
+        type: selectedItem.type as 'audio' | 'playlist',
+        id: selectedItem.id
+      })
+      // Clear the selection after assigning
+      setSelectedItem(null)
+      return
+    }
+    
+    if (hotkey.assignedItem) {
+      // Otherwise, play/stop the assigned item
+      if (isPlaying) {
+        stop()
+      } else {
+        play(hotkey.assignedItem)
+      }
     }
   }
   
@@ -124,13 +136,20 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
     return `${minutes}:${String(seconds).padStart(2, '0')}`
   }
   
+  // Decide if the hotkey should show an active/targetable state
+  const isTargetable = !hotkey.assignedItem && selectedItem !== null && !isUnassignMode;
+  
   const buttonClass = hotkey.assignedItem
     ? `w-full h-full rounded flex flex-col items-center justify-center p-1 transition-colors relative
        ${isPlaying 
            ? 'bg-yellow-500 text-black' 
            : 'bg-blue-700 hover:bg-blue-600 text-white'
        }`
-    : 'w-full h-full rounded bg-gray-800 hover:bg-gray-700 flex items-center justify-center p-1 relative'
+    : `w-full h-full rounded flex items-center justify-center p-1 relative
+       ${isTargetable 
+          ? 'bg-blue-900 hover:bg-blue-800' 
+          : 'bg-gray-800 hover:bg-gray-700'
+       }`
   
   return (
     <div 
@@ -167,9 +186,16 @@ export default function HotKeyButton({ hotkey, isPlaying }: HotKeyButtonProps) {
             )}
           </>
         ) : (
-          <div className="text-gray-500 text-sm absolute bottom-1 right-1">
-            {hotkey.position}
-          </div>
+          <>
+            <div className="text-gray-500 text-sm absolute bottom-1 right-1">
+              {hotkey.position}
+            </div>
+            {isTargetable && (
+              <div className="text-blue-400 text-sm">
+                Tap to assign
+              </div>
+            )}
+          </>
         )}
       </button>
     </div>

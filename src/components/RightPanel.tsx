@@ -7,9 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/Tabs'
 
 export default function RightPanel() {
   const [sectionStates, setSectionStates] = useState({
-    audio: true,
-    playlists: true,
-    utilities: true
+    audio: false,
+    playlists: false,
+    utilities: false
   })
   
   const toggleSection = (section: keyof typeof sectionStates) => {

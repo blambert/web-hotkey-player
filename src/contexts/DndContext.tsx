@@ -4,6 +4,8 @@ import { DragItem } from '../types'
 interface DndContextType {
   draggedItem: DragItem | null
   setDraggedItem: (item: DragItem | null) => void
+  selectedItem: DragItem | null
+  setSelectedItem: (item: DragItem | null) => void
 }
 
 const DndContext = createContext<DndContextType | null>(null)
@@ -18,10 +20,13 @@ export function useDnd() {
 
 export function DndProvider({ children }: { children: React.ReactNode }) {
   const [draggedItem, setDraggedItem] = useState<DragItem | null>(null)
+  const [selectedItem, setSelectedItem] = useState<DragItem | null>(null)
   
   const value: DndContextType = {
     draggedItem,
-    setDraggedItem
+    setDraggedItem,
+    selectedItem,
+    setSelectedItem
   }
   
   return (

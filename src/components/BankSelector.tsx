@@ -21,14 +21,14 @@ export default function BankSelector({
   }
   
   return (
-    <div className="flex justify-between items-center mb-4">
+    <div className="flex justify-between items-center mb-4 w-full">
       {/* Current Bank Display on Left */}
       <div className="text-xl font-bold">
         Bank {currentBank}
       </div>
       
       {/* Bank Selection Buttons on Right */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 ml-auto">
         {Array.from({ length: banks }).map((_, index) => {
           const bankId = index + 1
           const hasPlaylist = bankHasPlaylist(bankId)

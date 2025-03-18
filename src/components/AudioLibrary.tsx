@@ -14,7 +14,7 @@ export default function AudioLibrary() {
     getEffectiveDuration
   } = useAudio()
   
-  const { setDraggedItem } = useDnd()
+  const { setDraggedItem, selectedItem, setSelectedItem } = useDnd()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editingAudio, setEditingAudio] = useState<AudioFile | null>(null)
   const [isProcessingFiles, setIsProcessingFiles] = useState(false)
@@ -133,6 +133,18 @@ export default function AudioLibrary() {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
   }
   
+  const handleSelectAudio = (audioFile: AudioFile) => {
+    // Toggle selection - if already selected, deselect it
+    if (selectedItem && selectedItem.type === 'audio' && selectedItem.id === audioFile.id) {
+      setSelectedItem(null)
+    } else {
+      setSelectedItem({
+        type: 'audio',
+        id: audioFile.id
+      })
+    }
+  }
+  
   return (
     <div 
       className="p-2 flex flex-col"
@@ -155,12 +167,20 @@ export default function AudioLibrary() {
           // Calculate effective duration (accounting for trims)
           const effectiveDuration = getEffectiveDuration(audio);
           
+          // Check if this audio is the currently selected item
+          const isSelected = selectedItem && 
+                             selectedItem.type === 'audio' && 
+                             selectedItem.id === audio.id;
+          
           return (
             <div 
               key={audio.id}
-              className="p-2 mb-1 bg-gray-800 rounded hover:bg-gray-700 cursor-grab"
+              className={`p-2 mb-1 rounded hover:bg-gray-700 cursor-pointer ${
+                isSelected ? 'bg-blue-900' : 'bg-gray-800'
+              }`}
               draggable
               onDragStart={() => handleDragStart(audio)}
+              onClick={() => handleSelectAudio(audio)}
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center">
@@ -171,21 +191,30 @@ export default function AudioLibrary() {
                 <div className="flex space-x-1">
                   <button 
                     className="p-1 rounded hover:bg-gray-600"
-                    onClick={() => play({ type: 'audio', id: audio.id })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      play({ type: 'audio', id: audio.id });
+                    }}
                   >
                     <Play size={14} />
                   </button>
                   
                   <button 
                     className="p-1 rounded hover:bg-gray-600"
-                    onClick={() => setEditingAudio(audio)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingAudio(audio);
+                    }}
                   >
                     <Edit size={14} />
                   </button>
                   
                   <button 
                     className="p-1 rounded hover:bg-gray-600 text-red-400"
-                    onClick={() => deleteAudioFile(audio.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteAudioFile(audio.id);
+                    }}
                   >
                     <Trash2 size={14} />
                   </button>
