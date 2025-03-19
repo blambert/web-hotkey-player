@@ -46,8 +46,15 @@ export default function PlaylistEditor({ playlist, onClose }: PlaylistEditorProp
     }
   }, [showAddTracks])
   
+  // Save name immediately when it changes
+  useEffect(() => {
+    // Only update if the name has actually changed
+    if (name !== currentPlaylist.name) {
+      updatePlaylist(currentPlaylist.id, { name })
+    }
+  }, [name, currentPlaylist.id, currentPlaylist.name, updatePlaylist])
+  
   const handleSave = () => {
-    updatePlaylist(currentPlaylist.id, { name })
     onClose()
   }
   

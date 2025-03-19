@@ -90,36 +90,12 @@ export default function UtilitiesPanel() {
   return (
     <div className="p-4">
       <h2 className="text-lg font-semibold mb-4">Utilities</h2>
-
-			<div className="space-y-4">
-        
-        {/* Unassign Hotkeys section */}
-        <div className="bg-gray-800 p-3 rounded">
-          <h3 className="font-medium mb-2 flex items-center">
-            <X className="mr-2 h-4 w-4" />
-            Hotkey Management
-          </h3>
-          
-          <div className="flex space-x-2">
-            <button 
-              className={`px-3 py-1.5 rounded text-sm flex items-center ${
-                isUnassignMode 
-                  ? 'bg-red-600 hover:bg-red-700 text-white' 
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-              onClick={toggleUnassignMode}
-            >
-              <X className="mr-1 h-4 w-4" />
-              {isUnassignMode ? 'Exit Unassign Mode' : 'Unassign Hotkeys'}
-            </button>
-          </div>
-        </div>
-
-				
+      
+      <div className="space-y-4">
         <div className="bg-gray-800 p-3 rounded">
           <h3 className="font-medium mb-2 flex items-center">
             <Settings className="mr-2 h-4 w-4" />
-            Import/Export
+            Settings
           </h3>
           
           <div className="flex space-x-2">
@@ -148,7 +124,28 @@ export default function UtilitiesPanel() {
             />
           </div>
         </div>
-			
+        
+        {/* Unassign Hotkeys section */}
+        <div className="bg-gray-800 p-3 rounded">
+          <h3 className="font-medium mb-2 flex items-center">
+            <X className="mr-2 h-4 w-4" />
+            Hotkey Management
+          </h3>
+          
+          <div className="flex space-x-2">
+            <button 
+              className={`px-3 py-1.5 rounded text-sm flex items-center ${
+                isUnassignMode 
+                  ? 'bg-red-600 hover:bg-red-700 text-white' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+              onClick={toggleUnassignMode}
+            >
+              <X className="mr-1 h-4 w-4" />
+              {isUnassignMode ? 'Exit Unassign Mode' : 'Unassign Hotkeys'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
